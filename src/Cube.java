@@ -72,7 +72,7 @@ class Cube
         int err = dx - dy;
         while(true)
         {
-            g.drawLine(x0, y0, x1, y1);
+            g.fillRect(x0, y0, 2, 2);
             if(x0 == x1 && y0 == y1) break;
             int e2 = 2 * err;
             if (e2 > -dy) {
@@ -179,7 +179,7 @@ class Cube
 
             Vector3 cameraDir = Mat.vecSub(camera.position, rv0);
             double faceAng = Mat.vecDotNum(normal, cameraDir);
-            if(faceAng > 1) {
+            if(faceAng > 2) {
                 Vector3 lightDir = new Vector3(0, 0, 1);
                 double intensity = Math.max(0, Mat.vecDotNum(normal, lightDir));
 
@@ -235,8 +235,8 @@ class Cube
             minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
             maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
 
-            for(int x = minX; x<= maxX; x++) {
-                g.drawLine(x, y, x, y);
+            if(minX <= maxX) {
+                g.drawLine(minX, y, maxX, y);
             }
             x1 += slope1;
             x2 += slope2;
@@ -261,8 +261,8 @@ class Cube
             minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
             maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
 
-            for(int x = minX; x <= maxX; ++x) {
-                g.drawLine(x, y, x, y);
+            if(minX <= maxX) {
+                g.drawLine(minX, y, maxX, y);
             }
             x1 += slope1;
         }

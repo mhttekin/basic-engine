@@ -11,9 +11,8 @@ public class Main extends JPanel
     public Main()
     {
         this.cube = new Cube();
-
         Timer timer = new Timer(1, e -> {
-            angle += Math.toRadians(5);
+            angle += Math.toRadians(10);
             repaint();
         });
         timer.start();
@@ -55,15 +54,9 @@ public class Main extends JPanel
 
 
         Matrix rotationMatrix =  Matrix.rotateY(angle);
-        //rotationMatrix = Mat.matrixMul(rotationMatrix, Matrix.rotateZ(angle));
-         cube.rotate(rotationMatrix);
-
-        //Matrix trans = Matrix.transform(0, -1, 0);
-        //cube.transform(trans);
-        //cube.draw(g, camera, scale, center);
+        cube.rotate(rotationMatrix);
 
         cube.drawFilled(g, camera, scale, center);
-        //cube.draw(g, camera, scale, center);
         return buf;
     }
 
