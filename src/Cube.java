@@ -231,6 +231,10 @@ class Cube
         {
             int minX = (int) Math.ceil(Math.min(x1, x2));
             int maxX = (int) Math.floor(Math.max(x1, x2));
+
+            minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
+            maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
+
             for(int x = minX; x<= maxX; x++) {
                 g.drawLine(x, y, x, y);
             }
@@ -253,6 +257,10 @@ class Cube
         {
             int minX = (int) Math.ceil(Math.min(x1, v1.x + (y - v1.y) * slope2));
             int maxX = (int) Math.floor(Math.max(x1, v1.x + (y - v1.y) * slope2));
+
+            minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
+            maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
+
             for(int x = minX; x <= maxX; ++x) {
                 g.drawLine(x, y, x, y);
             }
