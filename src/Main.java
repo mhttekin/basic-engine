@@ -8,11 +8,13 @@ public class Main extends JPanel
 {
     private final Cube cube;
     private double angle = 0;
+    private double[][] zbuffer;
     public Main()
     {
         this.cube = new Cube();
+        this.zbuffer = new double[500][500];
         Timer timer = new Timer(1, e -> {
-            angle += Math.toRadians(10);
+            angle += Math.toRadians(3);
             repaint();
         });
         timer.start();
@@ -22,6 +24,14 @@ public class Main extends JPanel
         Image img = myImage();
         g.drawImage(img, 50, 50, this);
     }
+    private void clearBuffer(double[][] zbuffer)
+    {
+      for(int i = 0; i < zbuffer.length; ++i)
+      {
+            java.util.Arrays.fill(zbuffer[i], Double.POSITIVE_INFINITY);
+      }
+    }
+
     private Vector3 calculateCenter(Vector3[] vertices)
     {
         double sumX = 0, sumY = 0, sumZ = 0;
@@ -44,7 +54,7 @@ public class Main extends JPanel
         g.setColor(java.awt.Color.BLACK);
         g.fillRect(0, 0, buf.getWidth(), buf.getHeight());
         g.setColor(java.awt.Color.WHITE);
-
+        clearBuffer(zbuffer);
         Camera camera = new Camera( 90, 1, 0.01, 500);
         double scale = 500;
         int screenWidth = 500;
@@ -55,8 +65,9 @@ public class Main extends JPanel
 
         Matrix rotationMatrix =  Matrix.rotateY(angle);
         cube.rotate(rotationMatrix);
+        cube.transform(Matrix.transform(3,0, 5));
 
-        cube.drawFilled(g, camera, scale, center);
+        cube.drawFilled(g, camera, scale, center, zbuffer);
         return buf;
     }
 

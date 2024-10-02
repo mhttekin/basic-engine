@@ -9,6 +9,9 @@ class Cube
     public Matrix scaleMatrix;
     public Matrix transformMatrix;
 
+
+    private static final double EPSILON = 1e-6;
+
     public Cube()
     {
         this.vertices = new Vector3[]
@@ -54,26 +57,45 @@ class Cube
             Matrix point = Matrix.point3D(this.vertices[i]);
 
             point = Mat.matrixMul(this.scaleMatrix, point);
-            point = Mat.matrixMul(this.transformMatrix, point);
 
             Matrix rotatedPoint = Mat.matrixMul(this.rotationMatrix, point);
+
+            rotatedPoint = Mat.matrixMul(this.transformMatrix, rotatedPoint);
 
             Matrix finalPoint = Mat.matrixTrans(rotatedPoint, camera.position.x, camera.position.y, camera.position.z);
             transformedVertices[i] = finalPoint.toVector();
         }
         return transformedVertices;
     }
-    public void bresenham(Graphics g, int x0, int y0, int x1, int y1)
+
+    public void bresenham(Graphics g, Vector3 v0, Vector3 v1, double[][] zbuffer)
     {
+        int x0 = (int) v0.x;
+        int y0 = (int) v0.y;
+        double z0 = v0.z;
+        int x1 = (int) v1.x;
+        int y1 = (int) v1.y;
+        double z1 = v1.z;
+
         int dx = Math.abs(x1 - x0);
         int dy = Math.abs(y1 - y0);
         int sx = (x0 < x1) ? 1 : -1;
         int sy = (y0 < y1) ? 1 : -1;
+
         int err = dx - dy;
+
+        // Calculate total steps for z-interpolation
+        int steps = Math.max(dx, dy);
+        double zStep = (z1 - z0) / (steps != 0 ? steps : 1);
+
         while(true)
         {
-            g.fillRect(x0, y0, 2, 2);
+            if(checkZBuffer(zbuffer, x0, y0, z0)) {
+                g.fillRect(x0, y0, 2, 2);
+            }
+
             if(x0 == x1 && y0 == y1) break;
+
             int e2 = 2 * err;
             if (e2 > -dy) {
                 err -= dy;
@@ -83,8 +105,11 @@ class Cube
                 err += dx;
                 y0 += sy;
             }
+
+            z0 += zStep;
         }
     }
+
     public void draw(Graphics g, Camera camera, double scale, int center)
     {
         Vector3[] newVertices = transformedVertices(camera);
@@ -123,7 +148,7 @@ class Cube
 
             Vector3 cameraFace = Mat.vecSub(camera.position, rv0);
 
-            if (Mat.vecDotNum(normal, cameraFace) > 2.61) {
+            if (Mat.vecDotNum(normal, cameraFace) > 1) {
                 for (int i = 0; i < 3; i++) {
                     int start = face[i];
                     int end = face[(i + 1) % 3];
@@ -133,7 +158,38 @@ class Cube
             }
         }
     }
-    public void drawFilled(Graphics g, Camera camera, double scale, int center)
+
+
+    private boolean isTriangleBehind(Vector3[] vertices, double[][] zbuffer)
+    {
+        int minX = (int) Math.min(vertices[0].x, Math.min(vertices[1].x, vertices[2].x));
+        int maxX = (int) Math.max(vertices[0].x, Math.max(vertices[1].x, vertices[2].x));
+        int minY = (int) Math.min(vertices[0].y, Math.min(vertices[1].y, vertices[2].y));
+        int maxY = (int) Math.max(vertices[0].y, Math.max(vertices[1].y, vertices[2].y));
+
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                if (x >= 0 && x < zbuffer.length && y >= 0 && y < zbuffer[0].length) {
+                    double z = interpolateZ(vertices[0], vertices[1], vertices[2], x, y);
+                    if (z < zbuffer[x][y]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private double interpolateZ(Vector3 v0, Vector3 v1, Vector3 v2, int x, int y) {
+        double area = (v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y);
+        double w0 = ((v1.y - v2.y) * (x - v2.x) + (v2.x - v1.x) * (y - v2.y)) / area;
+        double w1 = ((v2.y - v0.y) * (x - v2.x) + (v0.x - v2.x) * (y - v2.y)) / area;
+        double w2 = 1 - w0 - w1;
+
+        return w0 * v0.z + w1 * v1.z + w2 * v2.z;
+    }
+
+    public void drawFilled(Graphics g, Camera camera, double scale, int center, double[][] zbuffer)
     {
         Vector3[] newVertices = transformedVertices(camera);
         Vector2[] projectedPoints = new Vector2[newVertices.length];
@@ -146,23 +202,23 @@ class Cube
             screenPoint.x = screenPoint.x * scale + center;
             screenPoint.y = screenPoint.y * scale + center;
             projectedPoints[i] = screenPoint;
-        }
 
-        java.util.Arrays.sort(triangles, (a, b) -> {
-            double zA = (newVertices[a[0]].z + newVertices[a[1]].z + newVertices[a[2]].z) / 3;
-            double zB = (newVertices[b[0]].z + newVertices[b[1]].z + newVertices[b[2]].z) / 3;
-            return Double.compare(zB, zA);
-        });
+            newVertices[i].z = (newVertices[i].z - camera.near) / (camera.far - camera.near);
+        }
 
         for(int[] triangle: triangles)
         {
-            Vector2 v0 = projectedPoints[triangle[0]];
-            Vector2 v1 = projectedPoints[triangle[1]];
-            Vector2 v2 = projectedPoints[triangle[2]];
+            Vector3 v0 = new Vector3(projectedPoints[triangle[0]].x, projectedPoints[triangle[0]].y, newVertices[triangle[0]].z);
+            Vector3 v1 = new Vector3(projectedPoints[triangle[1]].x, projectedPoints[triangle[1]].y, newVertices[triangle[1]].z);
+            Vector3 v2 = new Vector3(projectedPoints[triangle[2]].x, projectedPoints[triangle[2]].y, newVertices[triangle[2]].z);
 
             Vector3 l0 = this.vertices[triangle[0]];
             Vector3 l1 = this.vertices[triangle[1]];
             Vector3 l2 = this.vertices[triangle[2]];
+
+            double z0 = newVertices[triangle[0]].z;
+            double z1 = newVertices[triangle[1]].z;
+            double z2 = newVertices[triangle[2]].z;
 
             Matrix rotatedPointV0 = Mat.matrixMul(this.rotationMatrix, Matrix.point3D(l0));
             Matrix rotatedPointV1 = Mat.matrixMul(this.rotationMatrix, Matrix.point3D(l1));
@@ -179,92 +235,128 @@ class Cube
 
             Vector3 cameraDir = Mat.vecSub(camera.position, rv0);
             double faceAng = Mat.vecDotNum(normal, cameraDir);
+
             if(faceAng > 2) {
-                Vector3 lightDir = new Vector3(0, 0, 1);
-                double intensity = Math.max(0, Mat.vecDotNum(normal, lightDir));
 
-                int colorVal = (int) (intensity * 220) + 35;
-                g.setColor(new Color(colorVal, colorVal, colorVal));
+                if(!isTriangleBehind(new Vector3[]{v0, v1, v2}, zbuffer)) {
+                    Vector3 lightDir = new Vector3(0, 0, 1);
+                    double intensity = Math.max(0, Mat.vecDotNum(normal, lightDir));
 
-                fillTriangle(g, v0, v1, v2);
-                bresenham(g, (int)v0.x, (int)v0.y, (int)v1.x, (int)v1.y);
-                bresenham(g, (int)v1.x, (int)v1.y, (int)v2.x, (int)v2.y);
-                bresenham(g, (int)v2.x, (int)v2.y, (int)v0.x, (int)v0.y);
+                    int colorVal = (int) (intensity * 220) + 35;
+                    g.setColor(new Color(colorVal, colorVal, colorVal));
 
+                    fillTriangle(g, v0, v1, v2, zbuffer);
+                    bresenham(g, v0, v1, zbuffer);
+                    bresenham(g, v1, v2, zbuffer);
+                    bresenham(g, v2, v1, zbuffer);
+                }
             }
         }
     }
-    public void fillTriangle(Graphics g, Vector2 v0, Vector2 v1, Vector2 v2)
+    public void fillTriangle(Graphics g, Vector3 v0, Vector3 v1, Vector3 v2, double[][] zbuffer)
     {
-        if(v1.y < v0.y) {Vector2 temp = v0; v0 = v1; v1 = temp;}
-        if(v2.y < v0.y) {Vector2 temp = v0; v0 = v2; v2 = temp;}
-        if(v2.y < v1.y) {Vector2 temp = v1; v1 = v2; v2 = temp;}
+        if(v1.y < v0.y) {Vector3 temp = v0; v0 = v1; v1 = temp;}
+        if(v2.y < v0.y) {Vector3 temp = v0; v0 = v2; v2 = temp;}
+        if(v2.y < v1.y) {Vector3 temp = v1; v1 = v2; v2 = temp;}
 
         //Flat-top triangle
         if(v1.y == v2.y)
         {
-            fillFlatTop(g, v0, v1, v2);
+            fillFlatTop(g, v0, v1, v2, zbuffer);
         }
         else if(v0.y == v1.y)
         {
-            fillFlatBottom(g, v0, v1, v2);
+            fillFlatBottom(g, v0, v1, v2, zbuffer);
         }
         else
         {
-            Vector2 v3 = new Vector2(v0.x + ((v1.y - v0.y) / (v2.y - v0.y) * (v2.x - v0.x)), v1.y);
-            fillFlatTop(g, v0, v1, v3);
-            fillFlatBottom(g, v1, v3, v2);
+            double z3 = v0.z + ((v1.y - v0.y) / (v2.y - v0.y) * (v2.z - v0.z));
+            Vector3 v3 = new Vector3(v0.x + ((v1.y - v0.y) / (v2.y - v0.y) * (v2.x - v0.x)), v1.y, z3);
+            fillFlatTop(g, v0, v1, v3, zbuffer);
+            fillFlatBottom(g, v1, v3, v2, zbuffer);
         }
     }
 
-    public void fillFlatTop(Graphics g, Vector2 v0, Vector2 v1, Vector2 v2) {
+
+    private boolean checkZBuffer(double[][] zbuffer, int x, int y, double z) {
+        if (x < 0 || x >= zbuffer.length || y < 0 || y >= zbuffer[0].length) {
+            return false;
+        }
+        if (z < zbuffer[x][y] - EPSILON) {
+            zbuffer[x][y] = z;
+            return true;
+        }
+        return false;
+    }
+    public void fillFlatTop(Graphics g, Vector3 v0, Vector3 v1, Vector3 v2, double[][] zbuffer) {
         double slope1 = (v1.x - v0.x) / (v1.y - v0.y);
         double slope2 = (v2.x - v0.x) / (v2.y - v0.y);
+        double zSlope1 = (v1.z - v0.z) / (v1.y - v0.y);
+        double zSlope2 = (v2.z - v0.z) / (v2.y - v0.y);
 
-        double x1 =  v0.x;
-        double x2 =  v0.x;
+        double x1 = v0.x;
+        double x2 = v0.x;
+        double z1 = v0.z;
+        double z2 = v0.z;
 
         int minY = (int) Math.ceil(v0.y);
         int maxY = (int) Math.floor(v2.y);
 
-        for(int y = minY; y<= maxY; y++)
+        for(int y = minY; y <= maxY; y++)
         {
             int minX = (int) Math.ceil(Math.min(x1, x2));
             int maxX = (int) Math.floor(Math.max(x1, x2));
 
-            minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
-            maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
+            double zLeft = z1;
+            double zRight = z2;
+            double zStep = (zRight - zLeft) / (maxX - minX + 1);
 
-            if(minX <= maxX) {
-                g.drawLine(minX, y, maxX, y);
+            for(int x = minX; x <= maxX; x++) {
+                if(checkZBuffer(zbuffer, x, y, zLeft)) {
+                    g.drawLine(x, y, x, y);
+                }
+                zLeft += zStep;
             }
             x1 += slope1;
             x2 += slope2;
+            z1 += zSlope1;
+            z2 += zSlope2;
         }
     }
 
-    public void fillFlatBottom(Graphics g, Vector2 v0, Vector2 v1, Vector2 v2) {
+    public void fillFlatBottom(Graphics g, Vector3 v0, Vector3 v1, Vector3 v2, double[][] zbuffer) {
         double slope1 = (v2.x - v0.x) / (v2.y - v0.y);
         double slope2 = (v2.x - v1.x) / (v2.y - v1.y);
+        double zSlope1 = (v2.z - v0.z) / (v2.y - v0.y);
+        double zSlope2 = (v2.z - v1.z) / (v2.y - v1.y);
 
         double x1 = v0.x;
-        double x2 = v0.x;
+        double x2 = v1.x;
+        double z1 = v0.z;
+        double z2 = v1.z;
 
         int minY = (int) Math.ceil(v0.y);
         int maxY = (int) Math.floor(v2.y);
 
-        for(int y = minY; y<= maxY; y++)
+        for(int y = minY; y <= maxY; y++)
         {
-            int minX = (int) Math.ceil(Math.min(x1, v1.x + (y - v1.y) * slope2));
-            int maxX = (int) Math.floor(Math.max(x1, v1.x + (y - v1.y) * slope2));
+            int minX = (int) Math.ceil(Math.min(x1, x2));
+            int maxX = (int) Math.floor(Math.max(x1, x2));
 
-            minX = Math.max(minX, (int) Math.ceil(Math.min(v0.x, Math.min(v1.x, v2.x))));
-            maxX = Math.min(maxX, (int) Math.floor(Math.max(v0.x, Math.max(v1.x, v2.x))));
+            double zLeft = z1;
+            double zRight = z2;
+            double zStep = (zRight - zLeft) / (maxX - minX + 1);
 
-            if(minX <= maxX) {
-                g.drawLine(minX, y, maxX, y);
+            for(int x = minX; x <= maxX; x++) {
+                if(checkZBuffer(zbuffer, x, y, zLeft)) {
+                    g.drawLine(x, y, x, y);
+                }
+                zLeft += zStep;
             }
             x1 += slope1;
+            x2 += slope2;
+            z1 += zSlope1;
+            z2 += zSlope2;
         }
     }
 }
