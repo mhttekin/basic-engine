@@ -10,7 +10,7 @@ class Cube
     public Matrix transformMatrix;
 
 
-    private static final double EPSILON = 1e-6;
+    private static final double EPSILON = 1e-1;
 
     public Cube()
     {
@@ -52,23 +52,27 @@ class Cube
     public Vector3[] transformedVertices(Camera camera)
     {
         Vector3[] transformedVertices = new Vector3[this.vertices.length];
+        Matrix viewMatrix = camera.getViewMatrix();
         for(int i = 0; i < this.vertices.length; i++)
         {
             Matrix point = Matrix.point3D(this.vertices[i]);
 
             point = Mat.matrixMul(this.scaleMatrix, point);
+            point = Mat.matrixMul(this.rotationMatrix, point);
+            point = Mat.matrixMul(this.transformMatrix, point);
 
-            Matrix rotatedPoint = Mat.matrixMul(this.rotationMatrix, point);
+            // Apply view transformation
+            point = Mat.matrixMul(viewMatrix, point);
 
-            rotatedPoint = Mat.matrixMul(this.transformMatrix, rotatedPoint);
+            // Apply perspective projection
+            point = Mat.matrixMul(camera.perspective, point);
 
-            Matrix finalPoint = Mat.matrixTrans(rotatedPoint, camera.position.x, camera.position.y, camera.position.z);
-            transformedVertices[i] = finalPoint.toVector();
+            transformedVertices[i] = point.toVector();
         }
         return transformedVertices;
     }
 
-    public void bresenham(Graphics g, Vector3 v0, Vector3 v1, double[][] zbuffer)
+    private void bresenham(Graphics g, Vector3 v0, Vector3 v1, double[][] zbuffer)
     {
         int x0 = (int) v0.x;
         int y0 = (int) v0.y;
@@ -84,7 +88,6 @@ class Cube
 
         int err = dx - dy;
 
-        // Calculate total steps for z-interpolation
         int steps = Math.max(dx, dy);
         double zStep = (z1 - z0) / (steps != 0 ? steps : 1);
 
@@ -216,13 +219,25 @@ class Cube
             Vector3 l1 = this.vertices[triangle[1]];
             Vector3 l2 = this.vertices[triangle[2]];
 
-            double z0 = newVertices[triangle[0]].z;
-            double z1 = newVertices[triangle[1]].z;
-            double z2 = newVertices[triangle[2]].z;
+            Matrix L0 = Mat.matrixMul(this.scaleMatrix, Matrix.point3D(l0));
+            Matrix L1 = Mat.matrixMul(this.scaleMatrix, Matrix.point3D(l1));
+            Matrix L2 = Mat.matrixMul(this.scaleMatrix, Matrix.point3D(l2));
 
-            Matrix rotatedPointV0 = Mat.matrixMul(this.rotationMatrix, Matrix.point3D(l0));
-            Matrix rotatedPointV1 = Mat.matrixMul(this.rotationMatrix, Matrix.point3D(l1));
-            Matrix rotatedPointV2 = Mat.matrixMul(this.rotationMatrix, Matrix.point3D(l2));
+            Matrix rotatedPointV0 = Mat.matrixMul(this.rotationMatrix, L0);
+            Matrix rotatedPointV1 = Mat.matrixMul(this.rotationMatrix, L1);
+            Matrix rotatedPointV2 = Mat.matrixMul(this.rotationMatrix, L2);
+
+            rotatedPointV0 = Mat.matrixMul(this.transformMatrix, rotatedPointV0);
+            rotatedPointV1 = Mat.matrixMul(this.transformMatrix, rotatedPointV1);
+            rotatedPointV2 = Mat.matrixMul(this.transformMatrix, rotatedPointV2);
+
+            rotatedPointV0 = Mat.matrixMul(camera.getViewMatrix(), rotatedPointV0);
+            rotatedPointV1 = Mat.matrixMul(camera.getViewMatrix(), rotatedPointV1);
+            rotatedPointV2 = Mat.matrixMul(camera.getViewMatrix(), rotatedPointV2);
+
+            rotatedPointV0 = Mat.matrixMul(camera.perspective, rotatedPointV0);
+            rotatedPointV1 = Mat.matrixMul(camera.perspective, rotatedPointV1);
+            rotatedPointV2 = Mat.matrixMul(camera.perspective, rotatedPointV2);
 
             Vector3 rv0 = rotatedPointV0.toVector();
             Vector3 rv1 = rotatedPointV1.toVector();
@@ -233,13 +248,15 @@ class Cube
             Vector3 normal = Mat.vecCross(edge1, edge2);
             Mat.vecNormalize(normal);
 
-            Vector3 cameraDir = Mat.vecSub(camera.position, rv0);
+
+            // Relaxed back-face culling condition
+            Vector3 cameraDir = Mat.vecSub(camera.forward, rv0);
             double faceAng = Mat.vecDotNum(normal, cameraDir);
 
-            if(faceAng > 2) {
-
+            // Back-face culling condition
+            if(faceAng < -1) {
                 if(!isTriangleBehind(new Vector3[]{v0, v1, v2}, zbuffer)) {
-                    Vector3 lightDir = new Vector3(0, 0, 1);
+                    Vector3 lightDir = new Vector3(0, 0, -1);
                     double intensity = Math.max(0, Mat.vecDotNum(normal, lightDir));
 
                     int colorVal = (int) (intensity * 220) + 35;
@@ -248,7 +265,7 @@ class Cube
                     fillTriangle(g, v0, v1, v2, zbuffer);
                     bresenham(g, v0, v1, zbuffer);
                     bresenham(g, v1, v2, zbuffer);
-                    bresenham(g, v2, v1, zbuffer);
+                    bresenham(g, v2, v0, zbuffer);
                 }
             }
         }

@@ -167,15 +167,24 @@ class Camera
     double far;
     Matrix perspective;
     Vector3 position;
+    Vector3 forward;
+    Vector3 up;
+    Vector3 right;
+
     public Camera(double fov, double aspect, double near, double far)
     {
         this.fov = fov;
         this.aspect = aspect;
         this.near = near;
         this.far = far;
-        this.position = new Vector3(0, 0, 0);
+        this.position = new Vector3(0, 0, 10);
+        this.forward = new Vector3(0, 0, 1);
+        this.up = new Vector3(0, 1, 0);
+        this.right = Mat.vecCross(this.forward, this.up);
+        Mat.vecNormalize(this.right);
         this.perspective = camProject();
     }
+
     public Matrix camProject()
     {
         Matrix proj = new Matrix(4, 4);
@@ -189,11 +198,84 @@ class Camera
         proj.matrix[3][3] = 0;
         return proj;
     }
-    public static Camera negativeCamera(Camera c)
+    public void rotateY(double angle)
     {
-        return new Camera(-c.fov, -c.aspect, -c.near, -c.far);
+        double radians = Math.toRadians(angle);
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+
+        Vector3 newForward = new Vector3(
+                forward.x * cos + forward.z * sin,
+                forward.y,
+                -forward.x * sin + forward.z * cos
+        );
+        Mat.vecNormalize(newForward);
+        this.forward = newForward;
+
+        this.right = Mat.vecCross(this.forward, this.up);
+        Mat.vecNormalize(this.right);
     }
 
+    public void rotateX(double angle)
+    {
+        double radians = Math.toRadians(angle);
+        double cos = Math.cos(radians);
+        double sin = Math.sin(radians);
+
+        Vector3 newForward = new Vector3(
+                forward.x,
+                forward.y * cos - forward.z * sin,
+                forward.y * sin + forward.z * cos
+        );
+        Mat.vecNormalize(newForward);
+        this.forward = newForward;
+
+        this.up = Mat.vecCross(this.right, this.forward);
+        Mat.vecNormalize(this.up);
+    }
+
+    public Matrix getViewMatrix()
+    {
+        Matrix viewMatrix = new Matrix(4, 4);
+
+        viewMatrix.matrix[0][0] = right.x;
+        viewMatrix.matrix[0][1] = right.y;
+        viewMatrix.matrix[0][2] = right.z;
+        viewMatrix.matrix[1][0] = up.x;
+        viewMatrix.matrix[1][1] = up.y;
+        viewMatrix.matrix[1][2] = up.z;
+        viewMatrix.matrix[2][0] = forward.x;
+        viewMatrix.matrix[2][1] = forward.y;
+        viewMatrix.matrix[2][2] = forward.z;
+        viewMatrix.matrix[3][3] = 1;
+
+        viewMatrix.matrix[0][3] = Mat.vecDotNum(right, position);
+        viewMatrix.matrix[1][3] = Mat.vecDotNum(up, position);
+        viewMatrix.matrix[2][3] = Mat.vecDotNum(forward, position);
+
+        return viewMatrix;
+    }
+
+    public void moveForward(double distance)
+    {
+        position.x += forward.x * distance;
+        position.y += forward.y * distance;
+        position.z += forward.z * distance;
+    }
+
+    public void moveRight(double distance)
+    {
+        position.x += right.x * distance;
+        position.y += right.y * distance;
+        position.z += right.z * distance;
+    }
+
+    public void moveUp(double distance)
+    {
+        position.x += up.x * distance;
+        position.y += up.y * distance;
+        position.z += up.z * distance;
+    }
 }
 
 class Mat
@@ -244,6 +326,17 @@ class Mat
             v.z /= v.mag;
             v.vecMag();
         }
+    }
+    public static Vector3 vecNormalizeGiver(Vector3 v)
+    {
+        if(v.mag > 0)
+        {
+            v.x /= v.mag;
+            v.y /= v.mag;
+            v.z /= v.mag;
+            v.vecMag();
+        }
+        return v;
     }
     public static void vecNormalize(Vector2 v)
     {

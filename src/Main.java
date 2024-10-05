@@ -1,18 +1,31 @@
 import javax.swing.*;
 import java.awt.Graphics;
 import java.awt.Image;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import javax.swing.Timer;
 
 public class Main extends JPanel
 {
-    private final Cube cube;
+    private final Cube[] cube;
+    private final Cube c1;
+    private final Cube c2;
     private double angle = 0;
+    private static Camera camera;
     private double[][] zbuffer;
     public Main()
     {
-        this.cube = new Cube();
+        this.cube = new Cube[100];
+        for (int i = 0; i < 100; i++)
+        {
+            this.cube[i] = new Cube();
+        }
+        this.c1 = new Cube();
+        this.c2 = new Cube();
         this.zbuffer = new double[500][500];
+        camera = new Camera( 90, 1, 0.01, 500);
+        camera.position = new Vector3(0, 0, 10);
         Timer timer = new Timer(1, e -> {
             angle += Math.toRadians(3);
             repaint();
@@ -55,19 +68,23 @@ public class Main extends JPanel
         g.fillRect(0, 0, buf.getWidth(), buf.getHeight());
         g.setColor(java.awt.Color.WHITE);
         clearBuffer(zbuffer);
-        Camera camera = new Camera( 90, 1, 0.01, 500);
+
         double scale = 500;
         int screenWidth = 500;
         int center = screenWidth / 2;
-        camera.position = new Vector3(0, 0, 10);
-
-
 
         Matrix rotationMatrix =  Matrix.rotateY(angle);
-        cube.rotate(rotationMatrix);
-        cube.transform(Matrix.transform(3,0, 5));
-
-        cube.drawFilled(g, camera, scale, center, zbuffer);
+        //rotationMatrix = Mat.matrixMul(rotationMatrix, Matrix.rotateZ(angle));
+        //c1.rotate(rotationMatrix);
+        //c2.transform(Matrix.transform(0, 0, 10));
+        for(int i = 0; i < cube.length; ++i) {
+            cube[i].rotate(Matrix.rotateY(angle));
+            cube[i].transform(Matrix.transform( (int)(i / 10) * 5, 3,  (i % 10) * 5));
+            cube[i].drawFilled(g, camera, scale, center, zbuffer);
+        }
+        //c1.transform(Matrix.transform(1,1,1));
+        //c1.drawFilled(g, camera, scale, center, zbuffer);
+        //c2.drawFilled(g, camera, scale, center, zbuffer);
         return buf;
     }
 
@@ -79,6 +96,43 @@ public class Main extends JPanel
         f.setVisible(true);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-
+        f.addKeyListener(new KeyAdapter() {
+            public void keyPressed(KeyEvent e)
+            {
+                switch(e.getKeyCode()) {
+                    case KeyEvent.VK_W:
+                        camera.moveForward(-1);
+                        break;
+                    case KeyEvent.VK_S:
+                        camera.moveForward(1);
+                        break;
+                    case KeyEvent.VK_D:
+                        camera.moveRight(-1);
+                        break;
+                    case KeyEvent.VK_A:
+                        camera.moveRight(1);
+                        break;
+                    case KeyEvent.VK_SPACE:
+                        camera.moveUp(1);
+                        break;
+                    case KeyEvent.VK_K:
+                        camera.moveUp(-1);
+                        break;
+                    case KeyEvent.VK_UP:
+                        camera.rotateX(-10);
+                        break;
+                    case KeyEvent.VK_DOWN:
+                        camera.rotateX(10);
+                        break;
+                    case KeyEvent.VK_LEFT:
+                        camera.rotateY(-10);
+                        break;
+                    case KeyEvent.VK_RIGHT:
+                        camera.rotateY(10);
+                        break;
+                }
+                f.repaint();
+            }
+        });
     }
 }
